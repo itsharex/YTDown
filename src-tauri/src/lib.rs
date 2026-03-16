@@ -1,0 +1,64 @@
+mod commands;
+mod db;
+mod state;
+mod ytdlp;
+
+use state::AppState;
+use tauri::Manager;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let app_data_dir = app.path().app_data_dir()
+                .expect("Failed to get app data dir");
+            let conn = db::init_db(&app_data_dir)
+                .expect("Failed to initialize database");
+            app.manage(AppState::new(conn));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            // yt-dlp management
+            commands::ytdlp_mgmt::get_ytdlp_info,
+            commands::ytdlp_mgmt::check_ytdlp_update,
+            commands::ytdlp_mgmt::update_ytdlp,
+            // Formats
+            commands::formats::fetch_formats,
+            // Download engine
+            commands::download::start_download,
+            commands::download::cancel_download,
+            commands::download::pause_download,
+            commands::download::resume_download,
+            // File operations
+            commands::file_ops::move_file,
+            commands::file_ops::delete_file,
+            commands::file_ops::reveal_in_finder,
+            // Cookies
+            commands::cookies::import_cookies_from_browser,
+            commands::cookies::set_cookie_file,
+            // Library
+            commands::library::list_library,
+            commands::library::search_library,
+            commands::library::toggle_favorite,
+            commands::library::get_download,
+            // Playlists
+            commands::playlists::list_playlists,
+            commands::playlists::create_playlist,
+            commands::playlists::delete_playlist,
+            commands::playlists::add_playlist_item,
+            commands::playlists::get_playlist_items,
+            // URL Lists
+            commands::url_lists::list_url_lists,
+            commands::url_lists::create_url_list,
+            commands::url_lists::add_url_to_list,
+            commands::url_lists::import_url_list,
+            // Settings
+            commands::settings::set_ytdlp_path,
+            commands::settings::get_all_settings,
+            commands::settings::get_setting,
+            commands::settings::set_setting,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

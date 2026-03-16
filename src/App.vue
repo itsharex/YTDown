@@ -1,0 +1,213 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import type { ViewMode, SidebarSection, DownloadOptions } from './types'
+import { useDownloadsStore } from './stores/downloads'
+import { useLibraryStore } from './stores/library'
+
+// Layout components
+import AppToolbar from './components/layout/AppToolbar.vue'
+import AppSidebar from './components/layout/AppSidebar.vue'
+import AppStatusBar from './components/layout/AppStatusBar.vue'
+
+// Download components
+import DownloadDialog from './components/download/DownloadDialog.vue'
+import DownloadQueue from './components/download/DownloadQueue.vue'
+
+// Library view components
+import ListView from './components/library/ListView.vue'
+import GridView from './components/library/GridView.vue'
+import ColumnView from './components/library/ColumnView.vue'
+
+// Playlist components
+import PlaylistDetail from './components/playlist/PlaylistDetail.vue'
+
+// Settings components
+import GeneralSettings from './components/settings/GeneralSettings.vue'
+import FormatSettings from './components/settings/FormatSettings.vue'
+import AuthSettings from './components/settings/AuthSettings.vue'
+import RuleSettings from './components/settings/RuleSettings.vue'
+
+const currentView = ref<ViewMode>('list')
+const currentSection = ref<SidebarSection>('library-all')
+const searchQuery = ref('')
+
+// Download dialog state
+const showDownloadDialog = ref(false)
+const downloadUrl = ref('')
+
+// Playlist state
+const selectedPlaylistId = ref<number | null>(null)
+const selectedUrlListId = ref<number | null>(null)
+
+const downloadsStore = useDownloadsStore()
+const libraryStore = useLibraryStore()
+
+// Computed: items to display in library views
+const displayItems = computed(() => {
+  let items = libraryStore.filteredItems
+  if (currentSection.value === 'library-video') {
+    items = items.filter(d => ['mp4', 'mkv', 'webm'].includes(d.format ?? ''))
+  } else if (currentSection.value === 'library-audio') {
+    items = items.filter(d => ['mp3', 'm4a', 'flac', 'wav', 'opus'].includes(d.format ?? ''))
+  }
+  return items
+})
+
+const selectedPlaylist = computed(() =>
+  libraryStore.items.length >= 0 // always true, just to make computed reactive
+    ? null // TODO: Find playlist from playlists store by selectedPlaylistId
+    : null
+)
+
+// Section label for display
+const sectionLabel = computed(() => {
+  const labels: Record<SidebarSection, string> = {
+    'downloads-active': '進行中のダウンロード',
+    'downloads-completed': '完了したダウンロード',
+    'library-all': 'すべてのメディア',
+    'library-video': '映像',
+    'library-audio': '音声',
+    'playlist': 'プレイリスト',
+    'settings': '設定',
+  }
+  return labels[currentSection.value] ?? currentSection.value
+})
+
+// Whether to show library-style views
+const isLibrarySection = computed(() =>
+  ['library-all', 'library-video', 'library-audio', 'downloads-completed'].includes(currentSection.value)
+)
+
+// Handlers
+function handleSubmitUrl(url: string) {
+  downloadUrl.value = url
+  showDownloadDialog.value = true
+}
+
+async function handleStartDownload(url: string, options: DownloadOptions) {
+  await downloadsStore.startDownload(url, options)
+}
+
+function handleSelectPlaylist(id: number) {
+  selectedPlaylistId.value = id
+}
+
+function handleSelectUrlList(id: number) {
+  selectedUrlListId.value = id
+}
+
+function handleDownloadFromPlaylist(url: string) {
+  downloadUrl.value = url
+  showDownloadDialog.value = true
+}
+
+// Keyboard shortcuts
+function handleKeydown(e: KeyboardEvent) {
+  if (e.metaKey && e.key === ',') {
+    e.preventDefault()
+    currentSection.value = 'settings'
+  }
+  if (e.metaKey && e.key === 'f') {
+    e.preventDefault()
+    // Toolbar search will handle focus
+  }
+  if (e.metaKey && e.key === '1') { e.preventDefault(); currentView.value = 'list' }
+  if (e.metaKey && e.key === '2') { e.preventDefault(); currentView.value = 'grid' }
+  if (e.metaKey && e.key === '3') { e.preventDefault(); currentView.value = 'column' }
+}
+
+onMounted(() => {
+  downloadsStore.setupProgressListener()
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  downloadsStore.cleanup()
+  document.removeEventListener('keydown', handleKeydown)
+})
+</script>
+
+<template>
+  <div class="flex flex-col h-screen">
+    <!-- Toolbar -->
+    <AppToolbar
+      :currentView="currentView"
+      :searchQuery="searchQuery"
+      @update:currentView="currentView = $event"
+      @update:searchQuery="searchQuery = $event; libraryStore.searchQuery = $event"
+      @submit-url="handleSubmitUrl"
+    />
+
+    <div class="flex flex-1 overflow-hidden">
+      <!-- Sidebar -->
+      <AppSidebar
+        :currentSection="currentSection"
+        @update:currentSection="currentSection = $event"
+        @select-playlist="handleSelectPlaylist"
+        @select-url-list="handleSelectUrlList"
+      />
+
+      <!-- Main Content -->
+      <main class="flex-1 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
+        <!-- Section header (for library views) -->
+        <div v-if="isLibrarySection" class="flex items-center justify-between px-4 py-2 border-b border-[var(--color-separator)]">
+          <span class="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+            {{ sectionLabel }}
+          </span>
+        </div>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-auto">
+          <!-- Active downloads -->
+          <template v-if="currentSection === 'downloads-active'">
+            <div class="px-4 py-2 border-b border-[var(--color-separator)]">
+              <span class="text-sm font-medium text-neutral-600 dark:text-neutral-400">{{ sectionLabel }}</span>
+            </div>
+            <DownloadQueue />
+          </template>
+
+          <!-- Completed downloads / Library views -->
+          <template v-else-if="isLibrarySection">
+            <div class="flex-1 overflow-auto" :class="currentView !== 'column' ? 'p-4' : 'h-full'">
+              <ListView v-if="currentView === 'list'" :items="displayItems" />
+              <GridView v-else-if="currentView === 'grid'" :items="displayItems" />
+              <ColumnView v-else :items="displayItems" />
+            </div>
+          </template>
+
+          <!-- Playlist -->
+          <template v-else-if="currentSection === 'playlist'">
+            <PlaylistDetail
+              :playlist="selectedPlaylist"
+              @download-url="handleDownloadFromPlaylist"
+            />
+          </template>
+
+          <!-- Settings -->
+          <template v-else-if="currentSection === 'settings'">
+            <div class="p-6 space-y-8 max-w-2xl overflow-auto">
+              <GeneralSettings />
+              <hr class="border-[var(--color-separator)]" />
+              <FormatSettings />
+              <hr class="border-[var(--color-separator)]" />
+              <AuthSettings />
+              <hr class="border-[var(--color-separator)]" />
+              <RuleSettings />
+            </div>
+          </template>
+        </div>
+      </main>
+    </div>
+
+    <!-- Status Bar -->
+    <AppStatusBar />
+
+    <!-- Download Dialog -->
+    <DownloadDialog
+      :url="downloadUrl"
+      :open="showDownloadDialog"
+      @close="showDownloadDialog = false"
+      @start="handleStartDownload"
+    />
+  </div>
+</template>

@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "../styles/macos.css";
+
+body {
+  font-family: var(--font-system);
+  margin: 0;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}

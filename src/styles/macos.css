@@ -1,0 +1,18 @@
+:root {
+  --sidebar-width: 220px;
+  --toolbar-height: 52px;
+  --statusbar-height: 24px;
+  --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --color-sidebar-bg: rgba(246, 246, 246, 0.8);
+  --color-sidebar-bg-dark: rgba(30, 30, 30, 0.8);
+  --color-separator: rgba(0, 0, 0, 0.1);
+  --color-separator-dark: rgba(255, 255, 255, 0.1);
+  --color-accent: var(--system-accent-color, #007aff);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-sidebar-bg: var(--color-sidebar-bg-dark);
+    --color-separator: var(--color-separator-dark);
+  }
+}
