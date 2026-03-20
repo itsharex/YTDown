@@ -21,6 +21,9 @@ const DEFAULTS: AppSettings = {
   ytdlp_path: 'auto',
   theme: 'system',
   auto_classify: false,
+  background_image_light: '',
+  background_image_dark: '',
+  background_opacity: 30,
   restrict_filenames: false,
   no_overwrites: false,
   geo_bypass: false,
@@ -41,7 +44,7 @@ const BOOLEAN_KEYS: (keyof AppSettings)[] = [
 ]
 
 const INTEGER_KEYS: (keyof AppSettings)[] = [
-  'concurrent_downloads', 'retries',
+  'concurrent_downloads', 'retries', 'background_opacity',
 ]
 
 export const useSettingsStore = defineStore('settings', () => {

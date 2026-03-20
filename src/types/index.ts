@@ -184,6 +184,10 @@ export interface AppSettings {
   ytdlp_path: string
   theme: 'system' | 'light' | 'dark'
   auto_classify: boolean
+  // Appearance
+  background_image_light: string
+  background_image_dark: string
+  background_opacity: number
   // Advanced yt-dlp options
   restrict_filenames: boolean
   no_overwrites: boolean

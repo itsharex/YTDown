@@ -36,6 +36,54 @@ pub async fn move_file(
     Ok(())
 }
 
+/// Move file to trash (platform-specific)
+fn move_to_trash(path: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("osascript")
+            .args([
+                "-e",
+                &format!(
+                    "tell application \"Finder\" to delete POSIX file \"{}\"",
+                    path
+                ),
+            ])
+            .output()
+            .map_err(|e| format!("Failed to trash file: {}", e))?;
+        Ok(())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Use PowerShell to move to recycle bin
+        let ps_script = format!(
+            "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('{}', 'OnlyErrorDialogs', 'SendToRecycleBin')",
+            path.replace("'", "''")
+        );
+        Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .output()
+            .map_err(|e| format!("Failed to trash file: {}", e))?;
+        Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Try gio trash first, fall back to gvfs-trash
+        let result = Command::new("gio")
+            .args(["trash", path])
+            .output();
+        match result {
+            Ok(output) if output.status.success() => Ok(()),
+            _ => {
+                Command::new("gvfs-trash")
+                    .arg(path)
+                    .output()
+                    .map_err(|e| format!("Failed to trash file: {}", e))?;
+                Ok(())
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn delete_file(
     path: Option<String>,
@@ -47,16 +95,7 @@ pub async fn delete_file(
     if let Some(ref path) = path {
         if std::path::Path::new(path).exists() {
             if to_trash {
-                Command::new("osascript")
-                    .args([
-                        "-e",
-                        &format!(
-                            "tell application \"Finder\" to delete POSIX file \"{}\"",
-                            path
-                        ),
-                    ])
-                    .output()
-                    .map_err(|e| format!("Failed to trash file: {}", e))?;
+                move_to_trash(path)?;
             } else {
                 fs::remove_file(path).map_err(|e| format!("Failed to delete file: {}", e))?;
             }
@@ -75,11 +114,34 @@ pub async fn delete_file(
     Ok(())
 }
 
+/// Reveal file in the native file manager
 #[tauri::command]
 pub async fn reveal_in_finder(path: String) -> Result<(), String> {
-    Command::new("open")
-        .args(["-R", &path])
-        .spawn()
-        .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal in Finder: {}", e))?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .args([&format!("/select,{}", path)])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal in Explorer: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Open the parent directory
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.clone());
+        Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {}", e))?;
+    }
     Ok(())
 }

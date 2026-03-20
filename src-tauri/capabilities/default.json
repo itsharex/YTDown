@@ -29,6 +29,7 @@
     "allow-get-playlist-items",
     "allow-get-setting",
     "allow-get-ytdlp-info",
+    "allow-install-ytdlp",
     "allow-import-cookies-from-browser",
     "allow-import-url-list",
     "allow-list-library",

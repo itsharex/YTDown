@@ -82,6 +82,89 @@ fn default_playlist_mode() -> String {
     "single".to_string()
 }
 
+// ── Cross-platform process control ──────────────────────────────────
+
+/// Terminate a process by PID
+fn kill_process(pid: u32) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let result = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+        if result != 0 {
+            let err = std::io::Error::last_os_error();
+            if err.raw_os_error() != Some(libc::ESRCH) {
+                return Err(format!("SIGTERM failed: {}", err));
+            }
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output()
+            .map_err(|e| format!("taskkill failed: {}", e))?;
+        Ok(())
+    }
+}
+
+/// Suspend (pause) a process by PID
+fn suspend_process(pid: u32) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let result = unsafe { libc::kill(pid as i32, libc::SIGSTOP) };
+        if result != 0 {
+            return Err(format!("SIGSTOP failed: {}", std::io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        // Windows does not have SIGSTOP; use undocumented NtSuspendProcess or
+        // fall back to a simple error for now (resume will re-download)
+        Err("Windows does not support pausing downloads. Cancel and restart instead.".to_string())
+    }
+}
+
+/// Resume a suspended process by PID
+fn resume_process(pid: u32) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let result = unsafe { libc::kill(pid as i32, libc::SIGCONT) };
+        if result != 0 {
+            return Err(format!("SIGCONT failed: {}", std::io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let _ = pid;
+        Err("Windows does not support resuming suspended processes.".to_string())
+    }
+}
+
+/// Check if a process is still running
+fn is_process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        unsafe { libc::kill(pid as i32, 0) == 0 }
+    }
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .output()
+            .map(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                stdout.contains(&pid.to_string())
+            })
+            .unwrap_or(false)
+    }
+}
+
+// ── Tauri commands ──────────────────────────────────────────────────
+
 #[tauri::command]
 pub async fn start_download(
     app: AppHandle,
@@ -171,14 +254,7 @@ pub async fn cancel_download(
 ) -> Result<(), String> {
     let mut downloads = state.active_downloads.lock().await;
     if let Some(dl) = downloads.remove(&download_id) {
-        let result = unsafe { libc::kill(dl.pid as i32, libc::SIGTERM) };
-        if result != 0 {
-            // Process may already be dead, that's OK for cancel
-            let err = std::io::Error::last_os_error();
-            if err.raw_os_error() != Some(libc::ESRCH) {
-                return Err(format!("SIGTERM failed: {}", err));
-            }
-        }
+        kill_process(dl.pid)?;
         let db = state.db.lock().await;
         let _ = crate::db::queries::update_download_status(&db, download_id, "cancelled");
         Ok(())
@@ -194,10 +270,7 @@ pub async fn pause_download(
 ) -> Result<(), String> {
     let mut downloads = state.active_downloads.lock().await;
     if let Some(dl) = downloads.get_mut(&download_id) {
-        let result = unsafe { libc::kill(dl.pid as i32, libc::SIGSTOP) };
-        if result != 0 {
-            return Err(format!("SIGSTOP failed: {}", std::io::Error::last_os_error()));
-        }
+        suspend_process(dl.pid)?;
         dl.paused = true;
         let db = state.db.lock().await;
         let _ = crate::db::queries::update_download_status(&db, download_id, "paused");
@@ -205,10 +278,6 @@ pub async fn pause_download(
     } else {
         Err("Download not found".to_string())
     }
-}
-
-fn is_process_alive(pid: u32) -> bool {
-    unsafe { libc::kill(pid as i32, 0) == 0 }
 }
 
 #[tauri::command]
@@ -221,11 +290,8 @@ pub async fn resume_download(
     if let Some(dl) = downloads.get_mut(&download_id) {
         if dl.paused {
             if is_process_alive(dl.pid) {
-                // Process still alive, send SIGCONT
-                let result = unsafe { libc::kill(dl.pid as i32, libc::SIGCONT) };
-                if result != 0 {
-                    return Err(format!("SIGCONT failed: {}", std::io::Error::last_os_error()));
-                }
+                // Process still alive, send resume signal
+                resume_process(dl.pid)?;
                 dl.paused = false;
             } else {
                 // Process dead — re-download using --continue (yt-dlp resumes partial files)

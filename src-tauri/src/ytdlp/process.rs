@@ -213,7 +213,10 @@ pub async fn start_download(
     }
 
     // Output
-    let output_path = format!("{}/{}", config.output_dir, config.output_template);
+    let output_path = std::path::PathBuf::from(&config.output_dir)
+        .join(&config.output_template)
+        .to_string_lossy()
+        .to_string();
     args.extend(["-o".to_string(), output_path]);
 
     // Post-process options

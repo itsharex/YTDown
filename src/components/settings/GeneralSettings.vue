@@ -18,6 +18,18 @@ const filenamePresets = [
   { label: '日付-タイトル', value: '%(upload_date)s-%(title)s.%(ext)s' },
 ]
 
+async function handleBrowseBackground(mode: 'light' | 'dark') {
+  const selected = await open({
+    multiple: false,
+    title: mode === 'light' ? 'ライトモード用背景画像を選択' : 'ダークモード用背景画像を選択',
+    filters: [{ name: '画像', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
+  })
+  if (selected && typeof selected === 'string') {
+    const key = mode === 'light' ? 'background_image_light' : 'background_image_dark'
+    settingsStore.updateSetting(key, selected)
+  }
+}
+
 async function handleBrowseDir() {
   const selected = await open({
     directory: true,
@@ -82,6 +94,63 @@ async function handleBrowseDir() {
                 @click="settingsStore.updateSetting('theme', theme)">
           {{ theme === 'system' ? 'システム' : theme === 'light' ? 'ライト' : 'ダーク' }}
         </button>
+      </div>
+    </div>
+
+    <!-- Background image -->
+    <div>
+      <label class="block text-sm font-medium mb-2">背景画像</label>
+      <div class="space-y-3">
+        <!-- Light mode -->
+        <div class="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 space-y-1">
+          <label class="block text-xs font-medium text-neutral-500">ライトモード用</label>
+          <div class="flex gap-2">
+            <input :value="settingsStore.settings.background_image_light"
+                   @input="settingsStore.updateSetting('background_image_light', ($event.target as HTMLInputElement).value)"
+                   class="flex-1 h-8 px-3 rounded-md bg-neutral-100 dark:bg-neutral-800 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                   placeholder="画像ファイルのパスまたはURL" />
+            <button class="px-3 h-8 rounded-md text-sm bg-neutral-200 dark:bg-neutral-700" @click="handleBrowseBackground('light')">
+              選択...
+            </button>
+            <button v-if="settingsStore.settings.background_image_light"
+                    class="px-3 h-8 rounded-md text-sm bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                    @click="settingsStore.updateSetting('background_image_light', '')">
+              解除
+            </button>
+          </div>
+        </div>
+        <!-- Dark mode -->
+        <div class="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 space-y-1">
+          <label class="block text-xs font-medium text-neutral-500">ダークモード用</label>
+          <div class="flex gap-2">
+            <input :value="settingsStore.settings.background_image_dark"
+                   @input="settingsStore.updateSetting('background_image_dark', ($event.target as HTMLInputElement).value)"
+                   class="flex-1 h-8 px-3 rounded-md bg-neutral-100 dark:bg-neutral-800 text-sm outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                   placeholder="画像ファイルのパスまたはURL" />
+            <button class="px-3 h-8 rounded-md text-sm bg-neutral-200 dark:bg-neutral-700" @click="handleBrowseBackground('dark')">
+              選択...
+            </button>
+            <button v-if="settingsStore.settings.background_image_dark"
+                    class="px-3 h-8 rounded-md text-sm bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                    @click="settingsStore.updateSetting('background_image_dark', '')">
+              解除
+            </button>
+          </div>
+        </div>
+        <!-- Opacity slider -->
+        <div v-if="settingsStore.settings.background_image_light || settingsStore.settings.background_image_dark">
+          <label class="block text-xs text-neutral-500 mb-1">
+            背景の濃さ: {{ settingsStore.settings.background_opacity }}%
+          </label>
+          <input type="range" min="5" max="100" step="5"
+                 :value="settingsStore.settings.background_opacity"
+                 @input="settingsStore.updateSetting('background_opacity', parseInt(($event.target as HTMLInputElement).value))"
+                 class="w-full accent-[var(--color-accent)]" />
+          <div class="flex justify-between text-xs text-neutral-400">
+            <span>薄い</span>
+            <span>濃い</span>
+          </div>
+        </div>
       </div>
     </div>
 

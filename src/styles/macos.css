@@ -10,9 +10,7 @@
   --color-accent: var(--system-accent-color, #007aff);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-sidebar-bg: var(--color-sidebar-bg-dark);
-    --color-separator: var(--color-separator-dark);
-  }
+.dark {
+  --color-sidebar-bg: var(--color-sidebar-bg-dark);
+  --color-separator: var(--color-separator-dark);
 }

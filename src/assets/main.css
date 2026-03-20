@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "../styles/macos.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 body {
   font-family: var(--font-system);
   margin: 0;
@@ -11,20 +13,34 @@ body {
   background-color: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    color: #f5f5f7;
-    background-color: #1c1c1e;
-  }
+.dark body,
+body:where(.dark *) {
+  color: #f5f5f7;
+  background-color: #1c1c1e;
 }
 
 /* Form elements in dark mode */
-@media (prefers-color-scheme: dark) {
-  select, input {
-    color: #f5f5f7;
-  }
-  select option {
-    background-color: #2c2c2e;
-    color: #f5f5f7;
-  }
+.dark select, .dark input,
+select:where(.dark *), input:where(.dark *) {
+  color: #f5f5f7;
+}
+.dark select option,
+select option:where(.dark *) {
+  background-color: #2c2c2e;
+  color: #f5f5f7;
+}
+
+/* Button feedback */
+button {
+  transition: transform 80ms ease, opacity 120ms ease, filter 120ms ease;
+}
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+button:active:not(:disabled) {
+  transform: scale(0.96);
+  filter: brightness(0.92);
+}
+button:disabled {
+  cursor: not-allowed;
 }

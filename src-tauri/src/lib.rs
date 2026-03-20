@@ -24,6 +24,7 @@ pub fn run() {
             commands::ytdlp_mgmt::get_ytdlp_info,
             commands::ytdlp_mgmt::check_ytdlp_update,
             commands::ytdlp_mgmt::update_ytdlp,
+            commands::ytdlp_mgmt::install_ytdlp,
             // Formats
             commands::formats::fetch_formats,
             // Download engine

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { useDownload } from '../../composables/useDownload'
 import { useSettingsStore } from '../../stores/settings'
 import type { DownloadOptions, PlaylistMode } from '../../types'
@@ -12,6 +13,25 @@ const emit = defineEmits<{
 
 const { videoInfo, loading, error, fetchFormats } = useDownload()
 const settingsStore = useSettingsStore()
+
+const installing = ref(false)
+
+async function handleInstallYtdlp() {
+  installing.value = true
+  try {
+    await invoke('install_ytdlp')
+    // Retry fetching formats after install
+    fetchFormats(props.url)
+  } catch (e) {
+    error.value = `インストール失敗: ${e}`
+  } finally {
+    installing.value = false
+  }
+}
+
+const isYtdlpMissing = computed(() =>
+  !!error.value && (error.value.includes('not found') || error.value.includes('見つかりません'))
+)
 
 const mediaType = ref<'video' | 'audio'>('video')
 const selectedFormat = ref('mp4')
@@ -100,8 +120,12 @@ function handleStart() {
         </div>
 
         <!-- Error state -->
-        <div v-else-if="error" class="p-8 text-center text-red-500">
-          {{ error }}
+        <div v-else-if="error" class="p-8 text-center">
+          <p class="text-red-500">{{ error }}</p>
+          <button v-if="isYtdlpMissing" @click="handleInstallYtdlp" :disabled="installing"
+                  class="mt-4 px-4 py-2 rounded-md text-sm bg-[var(--color-accent)] text-white disabled:opacity-50">
+            {{ installing ? 'インストール中...' : 'yt-dlp をインストール' }}
+          </button>
         </div>
 
         <!-- Video info -->

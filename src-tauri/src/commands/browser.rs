@@ -11,13 +11,21 @@ const CHROMIUM_BROWSERS: &[&str] = &[
     "Arc", "Microsoft Edge", "Vivaldi", "Opera",
 ];
 
-/// Get the URL of the frontmost browser tab on macOS.
-/// Phase 1: Detect the topmost browser using CGWindowList via Swift (reliable z-order).
-/// Phase 2: Extract URL using the appropriate method per browser.
+/// Get the URL of the frontmost browser tab.
+/// macOS: Detect the topmost browser using CGWindowList via Swift, then extract URL.
+/// Other platforms: Not yet supported.
 #[tauri::command]
 pub async fn get_browser_url() -> Result<String, String> {
-    let browser = detect_topmost_browser()?;
-    get_url_from_browser(&browser)
+    #[cfg(not(target_os = "macos"))]
+    {
+        return Err("ブラウザからのURL取得はmacOSのみ対応しています。URLを直接入力してください。".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let browser = detect_topmost_browser()?;
+        get_url_from_browser(&browser)
+    }
 }
 
 /// Use Swift + CoreGraphics to get the actual window z-order
