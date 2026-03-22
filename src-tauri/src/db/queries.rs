@@ -45,6 +45,14 @@ pub fn update_download_status(conn: &Connection, id: i64, status: &str) -> SqlRe
     Ok(())
 }
 
+pub fn update_download_error(conn: &Connection, id: i64, error_message: &str) -> SqlResult<()> {
+    conn.execute(
+        "UPDATE downloads SET status = 'error', error_message = ?1 WHERE id = ?2",
+        params![error_message, id],
+    )?;
+    Ok(())
+}
+
 #[allow(dead_code)]
 pub fn update_download_progress(conn: &Connection, id: i64, progress: f64, bytes_downloaded: i64) -> SqlResult<()> {
     conn.execute(

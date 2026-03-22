@@ -303,9 +303,11 @@ pub async fn start_download(
     let app_clone = app.clone();
     let output_dir = config.output_dir.clone();
 
-    // Collect stderr file paths in a shared container
+    // Collect stderr file paths and error messages in shared containers
     let stderr_file_path = std::sync::Arc::new(tokio::sync::Mutex::new(None::<String>));
     let stderr_path_clone = stderr_file_path.clone();
+    let stderr_errors = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<String>::new()));
+    let stderr_errors_clone = stderr_errors.clone();
 
     // Read stderr concurrently
     let stderr_task = tokio::spawn(async move {
@@ -314,6 +316,10 @@ pub async fn start_download(
         while let Ok(Some(line)) = lines.next_line().await {
             if let Some(path) = extract_file_path(&line) {
                 *stderr_path_clone.lock().await = Some(path);
+            }
+            // Collect ERROR lines for user-visible error messages
+            if line.starts_with("ERROR:") || line.contains("ERROR:") {
+                stderr_errors_clone.lock().await.push(line);
             }
         }
     });
@@ -396,11 +402,29 @@ pub async fn start_download(
         if let Ok(status) = child.wait().await {
             let final_status = if status.success() { "completed" } else { "error" };
 
+            // Build error message from stderr if download failed
+            let error_msg = if !status.success() {
+                let errors = stderr_errors.lock().await;
+                if errors.is_empty() {
+                    None
+                } else {
+                    // Build a user-friendly error message
+                    let raw = errors.join("\n");
+                    Some(humanize_ytdlp_error(&raw))
+                }
+            } else {
+                None
+            };
+
             // Update DB status and file_path BEFORE emitting event
             if let Some(state) = app_clone.try_state::<crate::state::AppState>() {
                 {
                     let db = state.db.lock().await;
-                    let _ = crate::db::queries::update_download_status(&db, download_id, final_status);
+                    if let Some(ref msg) = error_msg {
+                        let _ = crate::db::queries::update_download_error(&db, download_id, msg);
+                    } else {
+                        let _ = crate::db::queries::update_download_status(&db, download_id, final_status);
+                    }
 
                     // Save file_path if detected and download succeeded
                     if status.success() {
@@ -422,11 +446,14 @@ pub async fn start_download(
             }
 
             // Emit event AFTER DB is updated so frontend reads correct status
-            let event = serde_json::json!({
+            let mut event = serde_json::json!({
                 "download_id": download_id,
                 "percent": if status.success() { 100.0 } else { 0.0 },
                 "status": final_status,
             });
+            if let Some(ref msg) = error_msg {
+                event["error_message"] = serde_json::json!(msg);
+            }
             let _ = app_clone.emit("download-progress", event);
         }
     });
@@ -483,6 +510,44 @@ fn find_latest_file(dir: &str) -> Option<String> {
         })
         .max_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()))
         .map(|e| e.path().to_string_lossy().to_string())
+}
+
+/// Convert raw yt-dlp error output into a user-friendly Japanese message
+fn humanize_ytdlp_error(raw: &str) -> String {
+    let lower = raw.to_lowercase();
+
+    // Safari cookie access errors (macOS Full Disk Access required)
+    if lower.contains("safari") && (lower.contains("permission") || lower.contains("could not find") || lower.contains("library") || lower.contains("failed to") || lower.contains("access")) {
+        return "Safari の Cookie にアクセスできません。\nシステム設定 → プライバシーとセキュリティ → フルディスクアクセス で YTDown を許可してください。".to_string();
+    }
+
+    // Generic cookie/browser access errors
+    if lower.contains("cookies") && (lower.contains("permission") || lower.contains("failed") || lower.contains("could not")) {
+        return "ブラウザの Cookie にアクセスできませんでした。ブラウザが閉じている場合は起動するか、別のブラウザを選択してください。".to_string();
+    }
+
+    // Login required
+    if lower.contains("sign in") || lower.contains("login") || lower.contains("authentication") {
+        return "ログインが必要なコンテンツです。認証設定でブラウザを指定してください。".to_string();
+    }
+
+    // Video unavailable
+    if lower.contains("video unavailable") || lower.contains("private video") {
+        return "この動画は利用できません（非公開・削除済み・地域制限など）。".to_string();
+    }
+
+    // Age restricted
+    if lower.contains("age") && lower.contains("restrict") {
+        return "年齢制限コンテンツです。認証設定でログイン済みブラウザを指定してください。".to_string();
+    }
+
+    // Fallback: show the raw error (trimmed)
+    let trimmed: String = raw.lines()
+        .filter(|l| l.contains("ERROR:"))
+        .map(|l| l.trim_start_matches("ERROR:").trim())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if trimmed.is_empty() { raw.to_string() } else { trimmed }
 }
 
 fn build_format_string(format: &str, quality: &str) -> String {

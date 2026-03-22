@@ -47,6 +47,7 @@
     "allow-fetch-playlist-items",
     "allow-toggle-favorite",
     "allow-update-ytdlp",
-    "allow-get-browser-url"
+    "allow-get-browser-url",
+    "allow-check-safari-access"
   ]
 }

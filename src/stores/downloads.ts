@@ -4,11 +4,26 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { Download, DownloadProgress, DownloadOptions, VideoInfo } from '../types'
 
+export interface PlaylistItemInfo {
+  url: string
+  title: string | null
+  channel: string | null
+  channel_id: string | null
+  channel_url: string | null
+  site: string | null
+  thumbnail_url: string | null
+  duration: number | null
+}
+
 export const useDownloadsStore = defineStore('downloads', () => {
   const queue = ref<Download[]>([])
   const progressMap = ref<Map<number, DownloadProgress>>(new Map())
   // Buffer for progress events that arrive before queue entry exists
   const pendingEvents = new Map<number, Array<DownloadProgress & { status?: string; title?: string }>>()
+
+  // Playlist fetch state
+  const playlistFetching = ref(false)
+  const playlistCancelled = ref(false)
 
   const activeDownloads = computed(() =>
     queue.value.filter(d => ['downloading', 'paused', 'pending'].includes(d.status))
@@ -21,6 +36,23 @@ export const useDownloadsStore = defineStore('downloads', () => {
     return invoke<VideoInfo>('fetch_formats', { url })
   }
 
+  async function fetchPlaylistItems(url: string): Promise<PlaylistItemInfo[]> {
+    playlistFetching.value = true
+    playlistCancelled.value = false
+    try {
+      const items = await invoke<PlaylistItemInfo[]>('fetch_playlist_items', { url })
+      if (playlistCancelled.value) return []
+      return items
+    } finally {
+      playlistFetching.value = false
+    }
+  }
+
+  function cancelPlaylistFetch() {
+    playlistCancelled.value = true
+    playlistFetching.value = false
+  }
+
   async function startDownload(url: string, options: DownloadOptions): Promise<number> {
     if (options.playlist_mode === 'all') {
       return startPlaylistDownload(url, options)
@@ -30,26 +62,17 @@ export const useDownloadsStore = defineStore('downloads', () => {
     return id
   }
 
-  interface PlaylistItemInfo {
-    url: string
-    title: string | null
-    channel: string | null
-    channel_id: string | null
-    channel_url: string | null
-    site: string | null
-    thumbnail_url: string | null
-    duration: number | null
-  }
-
   async function startPlaylistDownload(url: string, options: DownloadOptions): Promise<number> {
     // Step 1: Fetch playlist items (metadata only)
-    const items = await invoke<PlaylistItemInfo[]>('fetch_playlist_items', { url })
+    const items = await fetchPlaylistItems(url)
+    if (items.length === 0) return 0
 
     const singleOptions = { ...options, playlist_mode: 'single' as const }
     let firstId = 0
 
-    // Step 2: Start each item sequentially
+    // Step 2: Start each item sequentially (check cancel flag each iteration)
     for (const item of items) {
+      if (playlistCancelled.value) break
       try {
         const id = await invoke<number>('start_download', { url: item.url, options: singleOptions })
         addToQueue(
@@ -110,7 +133,7 @@ export const useDownloadsStore = defineStore('downloads', () => {
     }
   }
 
-  function applyProgressToItem(item: Download, p: DownloadProgress & { status?: string; title?: string }) {
+  function applyProgressToItem(item: Download, p: DownloadProgress & { status?: string; title?: string; error_message?: string }) {
     item.progress = (p.percent ?? 0) / 100
     if (p.title) item.title = p.title
     if (p.status === 'completed') {
@@ -119,6 +142,7 @@ export const useDownloadsStore = defineStore('downloads', () => {
       onCompletedCallback?.()
     } else if (p.status === 'error') {
       item.status = 'error'
+      if (p.error_message) item.error_message = p.error_message
     } else if (p.status === 'paused') {
       item.status = 'paused'
     } else if (p.status === 'downloading') {
@@ -175,7 +199,10 @@ export const useDownloadsStore = defineStore('downloads', () => {
     progressMap,
     activeDownloads,
     completedDownloads,
+    playlistFetching,
     fetchFormats,
+    fetchPlaylistItems,
+    cancelPlaylistFetch,
     startDownload,
     cancelDownload,
     pauseDownload,

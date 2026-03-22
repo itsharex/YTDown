@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
 import { useDownload } from '../../composables/useDownload'
+import { useDownloadsStore, type PlaylistItemInfo } from '../../stores/downloads'
 import { useSettingsStore } from '../../stores/settings'
 import type { DownloadOptions, PlaylistMode } from '../../types'
 
@@ -12,6 +12,7 @@ const emit = defineEmits<{
 }>()
 
 const { videoInfo, loading, error, fetchFormats } = useDownload()
+const downloadsStore = useDownloadsStore()
 const settingsStore = useSettingsStore()
 
 const installing = ref(false)
@@ -19,6 +20,7 @@ const installing = ref(false)
 async function handleInstallYtdlp() {
   installing.value = true
   try {
+    const { invoke } = await import('@tauri-apps/api/core')
     await invoke('install_ytdlp')
     // Retry fetching formats after install
     fetchFormats(props.url)
@@ -46,9 +48,20 @@ const customFormat = ref('')
 const useCustomFormat = ref(false)
 const playlistMode = ref<PlaylistMode>('single')
 
+// Playlist preview state
+const playlistItems = ref<PlaylistItemInfo[]>([])
+const playlistFetchError = ref<string | null>(null)
+const playlistPreviewLoaded = ref(false)
+
 const isPlaylistUrl = computed(() => {
   const u = props.url.toLowerCase()
   return u.includes('list=') || u.includes('/playlist') || u.includes('/sets/') || u.includes('/album/')
+})
+
+/** Detect channel upload lists (list=UU...) which contain ALL channel videos */
+const isChannelUploadList = computed(() => {
+  const match = props.url.match(/[?&]list=(UU[A-Za-z0-9_-]+)/)
+  return !!match
 })
 
 const videoFormats = ['mp4', 'mkv', 'webm']
@@ -59,9 +72,17 @@ const availableFormats = computed(() =>
   mediaType.value === 'video' ? videoFormats : audioFormats
 )
 
+const LARGE_PLAYLIST_THRESHOLD = 50
+
 watch(() => props.open, (isOpen) => {
   if (isOpen && props.url) {
     fetchFormats(props.url)
+    // Reset playlist state
+    playlistItems.value = []
+    playlistFetchError.value = null
+    playlistPreviewLoaded.value = false
+    // Default to 'single' for channel upload lists
+    playlistMode.value = isChannelUploadList.value ? 'single' : 'single'
     // Load defaults from settings
     embedThumbnail.value = settingsStore.settings.embed_thumbnail
     embedMetadata.value = settingsStore.settings.embed_metadata
@@ -71,6 +92,36 @@ watch(() => props.open, (isOpen) => {
     sponsorblock.value = settingsStore.settings.sponsorblock
   }
 })
+
+// When user selects "all", fetch playlist preview to show item count
+watch(playlistMode, async (mode) => {
+  if (mode === 'all' && !playlistPreviewLoaded.value) {
+    playlistFetchError.value = null
+    try {
+      const items = await downloadsStore.fetchPlaylistItems(props.url)
+      if (items.length > 0) {
+        playlistItems.value = items
+        playlistPreviewLoaded.value = true
+      }
+    } catch (e) {
+      playlistFetchError.value = `プレイリスト取得に失敗しました: ${e}`
+    }
+  }
+})
+
+function handleCancelPlaylistFetch() {
+  downloadsStore.cancelPlaylistFetch()
+  playlistMode.value = 'single'
+}
+
+const playlistConfirmed = ref(false)
+
+const needsPlaylistConfirmation = computed(() =>
+  playlistMode.value === 'all'
+  && playlistPreviewLoaded.value
+  && playlistItems.value.length >= LARGE_PLAYLIST_THRESHOLD
+  && !playlistConfirmed.value
+)
 
 function handleStart() {
   const s = settingsStore.settings
@@ -144,6 +195,12 @@ function handleStart() {
           <!-- Playlist mode selector -->
           <div v-if="isPlaylistUrl" class="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
             <p class="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2">プレイリストが検出されました</p>
+
+            <!-- Channel upload list warning -->
+            <p v-if="isChannelUploadList" class="text-xs text-amber-600 dark:text-amber-400 mb-2">
+              ⚠ このリストはチャンネルの全動画一覧です。「すべて」を選択すると大量の動画がダウンロードされます。
+            </p>
+
             <div class="flex gap-2">
               <button
                 class="flex-1 px-3 py-2 rounded-md text-sm transition-colors"
@@ -160,11 +217,49 @@ function handleStart() {
                 :class="playlistMode === 'all'
                   ? 'bg-blue-500 text-white'
                   : 'bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-600'"
-                @click="playlistMode = 'all'"
+                @click="playlistMode = 'all'; playlistConfirmed = false"
               >
                 すべて
                 <span class="block text-xs opacity-75 mt-0.5">リスト全件ダウンロード</span>
               </button>
+            </div>
+
+            <!-- Playlist fetching indicator -->
+            <div v-if="playlistMode === 'all' && downloadsStore.playlistFetching" class="mt-3 flex items-center gap-2">
+              <div class="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full" />
+              <span class="text-xs text-neutral-500">プレイリスト情報を取得中...</span>
+              <button @click="handleCancelPlaylistFetch"
+                      class="ml-auto px-2 py-1 text-xs rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors">
+                中止
+              </button>
+            </div>
+
+            <!-- Playlist fetch error -->
+            <p v-if="playlistFetchError" class="mt-2 text-xs text-red-500">{{ playlistFetchError }}</p>
+
+            <!-- Playlist item count preview -->
+            <div v-if="playlistMode === 'all' && playlistPreviewLoaded && playlistItems.length > 0" class="mt-3">
+              <p class="text-xs text-neutral-600 dark:text-neutral-400">
+                <span class="font-semibold">{{ playlistItems.length }}件</span> の動画が見つかりました
+              </p>
+
+              <!-- Large playlist confirmation -->
+              <div v-if="playlistItems.length >= LARGE_PLAYLIST_THRESHOLD && !playlistConfirmed"
+                   class="mt-2 p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <p class="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                  ⚠ {{ playlistItems.length }}件は大量です。本当にすべてダウンロードしますか？
+                </p>
+                <div class="flex gap-2">
+                  <button @click="playlistConfirmed = true"
+                          class="px-3 py-1 text-xs rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+                    すべてダウンロード
+                  </button>
+                  <button @click="playlistMode = 'single'"
+                          class="px-3 py-1 text-xs rounded bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors">
+                    この動画のみ
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -236,7 +331,8 @@ function handleStart() {
         <button @click="emit('close')" class="px-4 py-1.5 rounded-md text-sm bg-neutral-100 dark:bg-neutral-700">
           キャンセル
         </button>
-        <button @click="handleStart" :disabled="loading || !!error"
+        <button @click="handleStart"
+                :disabled="loading || !!error || needsPlaylistConfirmation || (playlistMode === 'all' && downloadsStore.playlistFetching)"
                 class="px-4 py-1.5 rounded-md text-sm bg-[var(--color-accent)] text-white disabled:opacity-50">
           ダウンロード開始
         </button>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-check-safari-access"
+description = "Enables the check_safari_access command without any pre-configured scope."
+commands.allow = ["check_safari_access"]
+
+[[permission]]
+identifier = "deny-check-safari-access"
+description = "Denies the check_safari_access command without any pre-configured scope."
+commands.deny = ["check_safari_access"]
