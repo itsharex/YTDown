@@ -23,7 +23,8 @@ const statusLabel = computed(() => {
     case 'paused': return '一時停止中'
     case 'pending': return 'キュー待ち'
     case 'completed': return '完了'
-    case 'failed': return props.download.error_message ?? 'エラー'
+    case 'failed':
+    case 'error': return errorLabel.value
     default: return props.download.status
   }
 })
@@ -32,6 +33,11 @@ const isPausable = computed(() => props.download.status === 'downloading')
 const isResumable = computed(() => props.download.status === 'paused')
 const isCompleted = computed(() => props.download.status === 'completed')
 const isError = computed(() => ['failed', 'error'].includes(props.download.status))
+
+const errorLabel = computed(() => {
+  if (!isError.value) return ''
+  return props.download.error_message ?? 'エラー'
+})
 
 const isPlaylist = computed(() =>
   (props.progress?.playlist_count ?? 0) > 1

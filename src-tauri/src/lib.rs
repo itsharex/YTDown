@@ -40,6 +40,7 @@ pub fn run() {
             // Cookies
             commands::cookies::import_cookies_from_browser,
             commands::cookies::set_cookie_file,
+            commands::cookies::check_safari_access,
             // Library
             commands::library::list_library,
             commands::library::search_library,

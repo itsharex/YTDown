@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { useSettingsStore } from '../../stores/settings'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const settingsStore = useSettingsStore()
+const safariAccessGranted = ref<boolean | null>(null)
 
 const browsers = [
   { value: 'none', label: '使用しない' },
@@ -16,6 +19,19 @@ const browsers = [
   { value: 'vivaldi', label: 'Vivaldi' },
 ]
 
+// Check Safari FDA when Safari is selected
+watch(() => settingsStore.settings.cookie_browser, async (browser) => {
+  if (browser === 'safari') {
+    try {
+      safariAccessGranted.value = await invoke<boolean>('check_safari_access')
+    } catch {
+      safariAccessGranted.value = false
+    }
+  } else {
+    safariAccessGranted.value = null
+  }
+}, { immediate: true })
+
 async function handleBrowseCookieFile() {
   const selected = await open({
     multiple: false,
@@ -27,6 +43,14 @@ async function handleBrowseCookieFile() {
   })
   if (selected && typeof selected === 'string') {
     settingsStore.updateSetting('cookie_file', selected)
+  }
+}
+
+async function recheckSafariAccess() {
+  try {
+    safariAccessGranted.value = await invoke<boolean>('check_safari_access')
+  } catch {
+    safariAccessGranted.value = false
   }
 }
 </script>
@@ -47,6 +71,24 @@ async function handleBrowseCookieFile() {
               class="w-full h-8 px-2 rounded-md bg-neutral-100 dark:bg-neutral-800 text-sm">
         <option v-for="b in browsers" :key="b.value" :value="b.value">{{ b.label }}</option>
       </select>
+
+      <!-- Safari: FDA not granted -->
+      <div v-if="settingsStore.settings.cookie_browser === 'safari' && safariAccessGranted === false"
+           class="mt-2 p-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+        <p class="text-xs text-amber-600 dark:text-amber-400">
+          ⚠ Safari の Cookie にアクセスできません。システム設定 → プライバシーとセキュリティ → フルディスクアクセス で YTDown を許可してください。
+        </p>
+        <button @click="recheckSafariAccess"
+                class="mt-1.5 px-2 py-0.5 text-xs rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors">
+          再チェック
+        </button>
+      </div>
+
+      <!-- Safari: FDA granted -->
+      <p v-if="settingsStore.settings.cookie_browser === 'safari' && safariAccessGranted === true"
+         class="mt-2 text-xs text-green-600 dark:text-green-400">
+        ✓ Safari の Cookie にアクセスできます
+      </p>
     </div>
 
     <!-- Cookie file -->
