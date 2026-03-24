@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod state;
 mod ytdlp;
+mod images;
 
 use state::AppState;
 use tauri::Manager;
