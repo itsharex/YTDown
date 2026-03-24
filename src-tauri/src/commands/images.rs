@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::path::Path;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::AppState;
+use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ImageSession {
@@ -62,7 +62,7 @@ pub async fn download_images(
         let db = state.db.lock().await;
         db.execute(
             "INSERT INTO image_sessions (source_url, site_name, image_count, output_dir) VALUES (?1, ?2, ?3, ?4)",
-            params![session_url, site_name, images.len() as i64, output_dir],
+            params![session_url, site_name, 0_i64, output_dir],
         ).map_err(|e| format!("DB insert error: {e}"))?;
         db.last_insert_rowid()
     }; // Lock released here
@@ -170,8 +170,8 @@ pub async fn list_image_sessions(
             })
         })
         .map_err(|e| format!("Query error: {e}"))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row mapping error: {e}"))?;
 
     Ok(sessions)
 }
@@ -203,8 +203,8 @@ pub async fn list_session_images(
             })
         })
         .map_err(|e| format!("Query error: {e}"))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row mapping error: {e}"))?;
 
     Ok(images)
 }
