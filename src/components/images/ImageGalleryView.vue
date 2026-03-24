@@ -2,8 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { useImagesStore } from '@/stores/images'
-import type { ImageRecord } from '@/types'
+import { useImagesStore } from '../../stores/images'
+import type { ImageRecord } from '../../types'
 import ImageSlideshow from './ImageSlideshow.vue'
 
 const imagesStore = useImagesStore()

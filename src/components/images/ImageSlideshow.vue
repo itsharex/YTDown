@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import type { ImageRecord } from '@/types'
+import type { ImageRecord } from '../../types'
 
 const props = defineProps<{
   images: ImageRecord[]

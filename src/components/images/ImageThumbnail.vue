@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScrapedImage } from '@/types'
+import type { ScrapedImage } from '../../types'
 
 defineProps<{
   image: ScrapedImage

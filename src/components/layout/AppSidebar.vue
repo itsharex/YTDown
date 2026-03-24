@@ -78,6 +78,25 @@ function sidebarButtonClass(section: SidebarSection) {
         </ul>
       </div>
 
+      <!-- Images section -->
+      <div>
+        <h3 class="px-2 text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">画像</h3>
+        <ul class="space-y-0.5">
+          <li>
+            <button :class="sidebarButtonClass('images-download')"
+                    @click="emit('update:currentSection', 'images-download')">
+              画像取得
+            </button>
+          </li>
+          <li>
+            <button :class="sidebarButtonClass('images-gallery')"
+                    @click="emit('update:currentSection', 'images-gallery')">
+              ギャラリー
+            </button>
+          </li>
+        </ul>
+      </div>
+
       <!-- Playlists section -->
       <div>
         <h3 class="px-2 text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">プレイリスト</h3>

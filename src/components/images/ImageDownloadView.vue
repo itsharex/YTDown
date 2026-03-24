@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useImagesStore } from '@/stores/images'
-import { useSettingsStore } from '@/stores/settings'
+import { useImagesStore } from '../../stores/images'
+import { useSettingsStore } from '../../stores/settings'
 import ImagePreviewGrid from './ImagePreviewGrid.vue'
 
 const imagesStore = useImagesStore()
