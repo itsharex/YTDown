@@ -75,6 +75,8 @@ const sectionLabel = computed(() => {
     'library-audio': '音声',
     'playlist': 'プレイリスト',
     'settings': '設定',
+    'images-download': '画像ダウンロード',
+    'images-gallery': '画像ギャラリー',
   }
   return labels[currentSection.value] ?? currentSection.value
 })
