@@ -235,6 +235,7 @@ onUnmounted(() => {
     <AppToolbar
       :currentView="currentView"
       :searchQuery="searchQuery"
+      :currentSection="currentSection"
       @update:currentView="currentView = $event"
       @update:searchQuery="searchQuery = $event; libraryStore.searchQuery = $event"
       @submit-url="handleSubmitUrl"

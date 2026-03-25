@@ -19,6 +19,7 @@ export const useImagesStore = defineStore('images', () => {
   const downloadProgress = ref<ImageDownloadProgress | null>(null)
   const scraping = ref(false)
   const downloading = ref(false)
+  const downloadCompleted = ref(false)
   const error = ref<string | null>(null)
   const currentPageUrl = ref('')
 
@@ -30,6 +31,7 @@ export const useImagesStore = defineStore('images', () => {
   async function scrapeUrl(url: string, minWidth = 100, minHeight = 100) {
     scraping.value = true
     error.value = null
+    downloadCompleted.value = false
     scrapedImages.value = []
     selectedIds.value = new Set()
 
@@ -70,6 +72,7 @@ export const useImagesStore = defineStore('images', () => {
         sessionUrl: currentPageUrl.value,
       })
       await loadSessions()
+      downloadCompleted.value = true
     } catch (e) {
       error.value = String(e)
     } finally {
@@ -125,6 +128,16 @@ export const useImagesStore = defineStore('images', () => {
     selectedIds.value = new Set()
   }
 
+  function resetScrape() {
+    scrapedImages.value = []
+    selectedIds.value = new Set()
+    downloadCompleted.value = false
+    downloadProgress.value = null
+    downloading.value = false
+    error.value = null
+    currentPageUrl.value = ''
+  }
+
   function setupProgressListener() {
     return listen<ImageDownloadProgress>('image-download-progress', (event) => {
       downloadProgress.value = event.payload
@@ -139,6 +152,7 @@ export const useImagesStore = defineStore('images', () => {
     downloadProgress,
     scraping,
     downloading,
+    downloadCompleted,
     error,
     selectedCount,
     hasSelection,
@@ -151,6 +165,7 @@ export const useImagesStore = defineStore('images', () => {
     toggleSelect,
     selectAll,
     deselectAll,
+    resetScrape,
     setupProgressListener,
   }
 })

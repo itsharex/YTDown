@@ -47,12 +47,12 @@ function openSlideshow(sessionId: number, startIndex = 0) {
 }
 
 async function handleDeleteSession(sessionId: number) {
-  const confirmed = await ask('このセッションを削除しますか？\n\nファイルも削除されます。', {
-    title: 'セッション削除',
+  const confirmed = await ask('このセッションの履歴を削除しますか？\n\nダウンロード済みの画像ファイルは残ります。', {
+    title: '履歴削除',
     kind: 'warning',
   })
   if (confirmed) {
-    await imagesStore.deleteSession(sessionId, true)
+    await imagesStore.deleteSession(sessionId, false)
     sessionImagesMap.value.delete(sessionId)
     if (expandedSessionId.value === sessionId) {
       expandedSessionId.value = null
@@ -108,24 +108,24 @@ function getImageSrc(record: ImageRecord): string {
         class="flex items-center justify-between px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700"
         @click="toggleSession(session.id)"
       >
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 min-w-0">
           <span class="text-sm">{{ expandedSessionId === session.id ? '▼' : '▶' }}</span>
-          <span class="text-sm font-medium">{{ session.site_name || session.source_url }}</span>
-          <span class="text-xs text-neutral-400">{{ session.image_count }}枚</span>
-        </div>
-        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium truncate">{{ session.site_name || session.source_url }}</span>
+          <span class="text-xs text-neutral-400 shrink-0">{{ session.image_count }}枚</span>
           <button
-            v-if="expandedSessionId === session.id && completedImages(session.id).length > 0"
+            class="ml-1 px-1.5 py-0.5 text-xs rounded text-neutral-400 hover:bg-red-500 hover:text-white shrink-0"
+            title="セッションと画像ファイルを削除"
+            @click.stop="handleDeleteSession(session.id)"
+          >
+            ✕
+          </button>
+        </div>
+        <div v-if="expandedSessionId === session.id && completedImages(session.id).length > 0">
+          <button
             class="px-2 py-1 text-xs rounded bg-blue-500 text-white hover:bg-blue-600"
             @click.stop="openSlideshow(session.id)"
           >
             ▶ スライドショー
-          </button>
-          <button
-            class="px-2 py-1 text-xs rounded bg-neutral-300 dark:bg-neutral-600 hover:bg-red-500 hover:text-white"
-            @click.stop="handleDeleteSession(session.id)"
-          >
-            削除
           </button>
         </div>
       </div>
