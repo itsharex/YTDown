@@ -24,40 +24,6 @@ CREATE TABLE IF NOT EXISTS downloads (
   is_favorite       BOOLEAN DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS playlists (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  name        TEXT NOT NULL,
-  description TEXT,
-  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS playlist_items (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
-  download_id INTEGER REFERENCES downloads(id) ON DELETE SET NULL,
-  url         TEXT,
-  sort_order  INTEGER DEFAULT 0,
-  added_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-  CHECK (download_id IS NOT NULL OR url IS NOT NULL)
-);
-
-CREATE TABLE IF NOT EXISTS url_lists (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  name        TEXT NOT NULL,
-  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS url_list_items (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  list_id     INTEGER NOT NULL REFERENCES url_lists(id) ON DELETE CASCADE,
-  url         TEXT NOT NULL,
-  title       TEXT,
-  sort_order  INTEGER DEFAULT 0,
-  added_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE VIRTUAL TABLE IF NOT EXISTS downloads_fts USING fts5(
   title, channel, url, site,
   content='downloads',
